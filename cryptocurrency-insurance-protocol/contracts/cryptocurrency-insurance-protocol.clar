@@ -223,3 +223,38 @@
     next-due-date: uint
   }
 )
+
+(define-map referrals
+  {
+    referrer: principal,
+    referee: principal
+  }
+  {
+    timestamp: uint,
+    reward-amount: uint,
+    status: (string-ascii 20)
+  }
+)
+
+
+(define-map discount-tiers
+  {
+    tier-level: uint
+  }
+  {
+    reputation-threshold: uint,
+    discount-percentage: uint,
+    special-benefits: (list 3 (string-ascii 30))
+  }
+)
+
+
+
+(define-public (deactivate-emergency-stop)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (var-set emergency-stop-activated false)
+    (ok true)
+  )
+)
+
