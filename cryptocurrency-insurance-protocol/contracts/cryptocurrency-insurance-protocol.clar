@@ -181,3 +181,12 @@
     reinsurance-threshold: u5000 
   }
 )
+
+(map-set external-oracles
+  { oracle-id: u1 }
+  {
+    oracle-address: CONTRACT_OWNER,
+    last-validation-block: u0,
+    validation-success-rate: u100
+  }
+)
