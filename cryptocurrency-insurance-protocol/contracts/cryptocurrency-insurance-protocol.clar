@@ -344,8 +344,6 @@
   )
 )
 
-
-
 (define-public (stake-funds (amount uint))
   (begin
     (asserts! (not (var-get emergency-stop-activated)) ERR_EMERGENCY_STOP)
@@ -381,4 +379,25 @@
   )
 )
 
-
+(define-private (calculate-discount (user principal) (base-premium uint))
+  (let (
+    (user-rep (default-to
+              {
+                total-reputation: u0,
+                claim-history: (list false),
+                staked-amount: u0,
+                last-activity-block: u0
+              }
+              (map-get? user-reputation { user: user })))
+    (tier-1 (unwrap-panic (map-get? discount-tiers { tier-level: u1 })))
+    (tier-2 (unwrap-panic (map-get? discount-tiers { tier-level: u2 })))
+  )
+    (if (>= (get total-reputation user-rep) (get reputation-threshold tier-2))
+      (- base-premium (/ (* base-premium (get discount-percentage tier-2)) u100))
+      (if (>= (get total-reputation user-rep) (get reputation-threshold tier-1))
+        (- base-premium (/ (* base-premium (get discount-percentage tier-1)) u100))
+        base-premium
+      )
+    )
+  )
+)
