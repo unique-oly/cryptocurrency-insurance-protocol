@@ -190,3 +190,214 @@
     validation-success-rate: u100
   }
 )
+
+(define-constant ERR_INVALID_PREMIUM_PAYMENT (err u11))
+(define-constant ERR_POLICY_NOT_ACTIVE (err u12))
+(define-constant ERR_ALREADY_VOTED (err u13))
+(define-constant ERR_INVALID_PARAMETERS (err u14))
+(define-constant ERR_INSUFFICIENT_REPUTATION (err u15))
+
+;; Contract Management and Upgradability
+(define-data-var contract-admin principal tx-sender)
+(define-map authorized-admins
+  {
+    admin: principal
+  }
+  {
+    role: (string-ascii 20),
+    permissions: (list 5 (string-ascii 30)),
+    active-since: uint
+  }
+)
+
+;; Premium Payment Tracking
+(define-map premium-payments
+  {
+    policy-id: uint,
+    payment-id: uint
+  }
+  {
+    amount: uint,
+    timestamp: uint,
+    status: (string-ascii 20),
+    next-due-date: uint
+  }
+)
+
+(define-map referrals
+  {
+    referrer: principal,
+    referee: principal
+  }
+  {
+    timestamp: uint,
+    reward-amount: uint,
+    status: (string-ascii 20)
+  }
+)
+
+
+(define-map discount-tiers
+  {
+    tier-level: uint
+  }
+  {
+    reputation-threshold: uint,
+    discount-percentage: uint,
+    special-benefits: (list 3 (string-ascii 30))
+  }
+)
+
+
+(define-public (deactivate-emergency-stop)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (var-set emergency-stop-activated false)
+    (ok true)
+  )
+)
+
+(define-data-var next-payment-id uint u0)
+(define-data-var total-premiums-collected uint u0)
+(define-data-var total-claims-paid uint u0)
+(define-data-var contract-liquidity uint u0)
+
+
+;; Initial risk pool and oracle configurations
+(map-set risk-pools
+  { risk-category: "low-risk" }
+  {
+    total-pool-value: u0,
+    risk-multiplier: u10,
+    liquidity-buffer: u1000,
+    reinsurance-threshold: u5000
+  }
+)
+
+(map-set external-oracles
+  { oracle-id: u1 }
+  {
+    oracle-address: CONTRACT_OWNER,
+    last-validation-block: u0,
+    validation-success-rate: u100
+  }
+)
+
+(define-private (calculate-claim-complexity (claim-amount uint) (policy-id uint))
+  (let (
+    (policy (unwrap-panic (map-get? policies { policy-id: policy-id, holder: tx-sender })))
+    (coverage-ratio (/ (* claim-amount u100) (get coverage-amount policy)))
+  )
+    (if (> coverage-ratio u80)
+      u3  ;; High complexity
+      (if (> coverage-ratio u40)
+        u2  ;; Medium complexity
+        u1) ;; Low complexity
+    )
+  )
+)
+
+
+(define-private (update-risk-pool-value (risk-category (string-ascii 50)) (amount uint))
+  (let (
+    (pool (unwrap-panic (map-get? risk-pools { risk-category: risk-category })))
+  )
+    (map-set risk-pools
+      { risk-category: risk-category }
+      (merge pool { total-pool-value: (+ (get total-pool-value pool) amount) })
+    )
+  )
+)
+
+
+
+(define-private (process-claim-payment (policy-id uint) (claim-id uint))
+  (let (
+    (claim (unwrap-panic (map-get? claims { policy-id: policy-id, claim-id: claim-id })))
+    (policy (unwrap-panic (map-get? policies { policy-id: policy-id, holder: tx-sender })))
+  )
+    ;; Ensure contract has sufficient funds
+    (asserts! (>= (var-get contract-liquidity) (get claim-amount claim)) ERR_INSUFFICIENT_FUNDS)
+   
+   
+    ;; Update risk pool
+    (update-risk-pool-value (get risk-category policy) (- u0 (get claim-amount claim)))
+   
+    (ok true)
+  )
+)
+
+
+;; Administrative Functions
+(define-public (add-admin (new-admin principal) (role (string-ascii 20)) (permissions (list 5 (string-ascii 30))))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (map-set authorized-admins
+      { admin: new-admin }
+      {
+        role: role,
+        permissions: permissions,
+        active-since: stacks-block-height
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-public (stake-funds (amount uint))
+  (begin
+    (asserts! (not (var-get emergency-stop-activated)) ERR_EMERGENCY_STOP)
+    (asserts! (>= (stx-get-balance tx-sender) amount) ERR_INSUFFICIENT_FUNDS)
+   
+    ;; Transfer STX to contract
+    (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+   
+    ;; Update user reputation
+    (let (
+      (current-rep (default-to
+                    {
+                      total-reputation: u0,
+                      claim-history: (list false),
+                      staked-amount: u0,
+                      last-activity-block: u0
+                    }
+                    (map-get? user-reputation { user: tx-sender })))
+    )
+      (map-set user-reputation
+        { user: tx-sender }
+        {
+          total-reputation: (+ (get total-reputation current-rep) (/ amount u50)),
+          claim-history: (get claim-history current-rep),
+          staked-amount: (+ (get staked-amount current-rep) amount),
+          last-activity-block: stacks-block-height
+        }
+      )
+    )
+   
+    (var-set contract-liquidity (+ (var-get contract-liquidity) amount))
+    (ok true)
+  )
+)
+
+(define-private (calculate-discount (user principal) (base-premium uint))
+  (let (
+    (user-rep (default-to
+              {
+                total-reputation: u0,
+                claim-history: (list false),
+                staked-amount: u0,
+                last-activity-block: u0
+              }
+              (map-get? user-reputation { user: user })))
+    (tier-1 (unwrap-panic (map-get? discount-tiers { tier-level: u1 })))
+    (tier-2 (unwrap-panic (map-get? discount-tiers { tier-level: u2 })))
+  )
+    (if (>= (get total-reputation user-rep) (get reputation-threshold tier-2))
+      (- base-premium (/ (* base-premium (get discount-percentage tier-2)) u100))
+      (if (>= (get total-reputation user-rep) (get reputation-threshold tier-1))
+        (- base-premium (/ (* base-premium (get discount-percentage tier-1)) u100))
+        base-premium
+      )
+    )
+  )
+)
