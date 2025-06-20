@@ -111,3 +111,43 @@
     (ok true)
   )
 )
+
+;; Utility Functions with Enhanced Logic
+(define-private (calculate-premium 
+  (coverage-amount uint) 
+  (risk-category (string-ascii 50))
+  (dynamic-params (list 10 uint))
+  (additional-coverage-types (list 5 (string-ascii 30)))
+)
+  (let (
+    (risk-pool (unwrap-panic (map-get? risk-pools { risk-category: risk-category })))
+    (base-premium (* coverage-amount (/ (get risk-multiplier risk-pool) u100)))
+    (dynamic-adjustment (fold + dynamic-params u0))
+  )
+  ;; Complex premium calculation
+  (+ base-premium 
+     (/ (* base-premium dynamic-adjustment) u1000)
+     (* (len additional-coverage-types) u10)
+  )
+))
+
+
+;; Advanced Reputation and Stake Management
+(define-private (update-user-reputation 
+  (user principal) 
+  (premium uint)
+)
+  (let (
+    (current-rep (unwrap-panic (map-get? user-reputation { user: user })))
+    (new-reputation (+ (get total-reputation current-rep) (/ premium u100)))
+  )
+  (map-set user-reputation 
+    { user: user }
+    {
+      total-reputation: new-reputation,
+      claim-history: (unwrap-panic (as-max-len? (concat (get claim-history current-rep) (list true)) u10)),
+      staked-amount: (+ (get staked-amount current-rep) (/ premium u10)),
+      last-activity-block: stacks-block-height
+    }
+  )
+))
