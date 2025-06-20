@@ -33,3 +33,44 @@
   }
 )
 
+(define-map claims
+  {
+    policy-id: uint,
+    claim-id: uint
+  }
+  {
+    claim-amount: uint,
+    claim-status: (string-ascii 20),
+    claim-timestamp: uint,
+    claim-evidence: (optional (string-ascii 255)),
+    oracle-validation-data: (optional (string-ascii 255)),
+    claim-complexity-score: uint
+  }
+)
+
+;; Enhanced Risk Pool Management
+(define-map risk-pools
+  { 
+    risk-category: (string-ascii 50) 
+  }
+  {
+    total-pool-value: uint,
+    risk-multiplier: uint,
+    liquidity-buffer: uint,
+    reinsurance-threshold: uint
+  }
+)
+
+;; Advanced Governance and Voting Mechanism
+(define-map claim-votes
+  {
+    claim-id: uint,
+    voter: principal
+  }
+  {
+    vote: bool,
+    voting-power: uint,
+    voting-stake: uint,
+    reputation-score: uint
+  }
+)
