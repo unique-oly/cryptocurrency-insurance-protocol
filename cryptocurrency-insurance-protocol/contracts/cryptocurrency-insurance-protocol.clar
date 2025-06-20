@@ -74,3 +74,40 @@
     reputation-score: uint
   }
 )
+
+;; Reputation and Staking Mechanism
+(define-map user-reputation
+  { 
+    user: principal 
+  }
+  {
+    total-reputation: uint,
+    claim-history: (list 10 bool),
+    staked-amount: uint,
+    last-activity-block: uint
+  }
+)
+
+;; Emergency Stop Mechanism
+(define-data-var emergency-stop-activated bool false)
+
+;; Oracle Integration Placeholder
+(define-map external-oracles 
+  { 
+    oracle-id: uint 
+  }
+  {
+    oracle-address: principal,
+    last-validation-block: uint,
+    validation-success-rate: uint
+  }
+)
+
+;; Emergency Stop Mechanism
+(define-public (activate-emergency-stop)
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT_OWNER) ERR_UNAUTHORIZED)
+    (var-set emergency-stop-activated true)
+    (ok true)
+  )
+)
