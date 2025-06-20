@@ -190,3 +190,36 @@
     validation-success-rate: u100
   }
 )
+
+(define-constant ERR_INVALID_PREMIUM_PAYMENT (err u11))
+(define-constant ERR_POLICY_NOT_ACTIVE (err u12))
+(define-constant ERR_ALREADY_VOTED (err u13))
+(define-constant ERR_INVALID_PARAMETERS (err u14))
+(define-constant ERR_INSUFFICIENT_REPUTATION (err u15))
+
+;; Contract Management and Upgradability
+(define-data-var contract-admin principal tx-sender)
+(define-map authorized-admins
+  {
+    admin: principal
+  }
+  {
+    role: (string-ascii 20),
+    permissions: (list 5 (string-ascii 30)),
+    active-since: uint
+  }
+)
+
+;; Premium Payment Tracking
+(define-map premium-payments
+  {
+    policy-id: uint,
+    payment-id: uint
+  }
+  {
+    amount: uint,
+    timestamp: uint,
+    status: (string-ascii 20),
+    next-due-date: uint
+  }
+)
